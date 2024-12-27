@@ -1,0 +1,10 @@
+# ninja log v5
+1	18211	1735288864058998710	/data4/lj/PoseEstimation/lib/pointnet2/build/temp.linux-x86_64-cpython-39/_ext_src/src/ball_query_gpu.o	763fb03bb290d1fb
+3	19485	1735288865335004566	/data4/lj/PoseEstimation/lib/pointnet2/build/temp.linux-x86_64-cpython-39/_ext_src/src/sampling_gpu.o	acecab98017729de
+2	19559	1735288865407004896	/data4/lj/PoseEstimation/lib/pointnet2/build/temp.linux-x86_64-cpython-39/_ext_src/src/interpolate_gpu.o	187a0fdcedb0c118
+2	19711	1735288865563005612	/data4/lj/PoseEstimation/lib/pointnet2/build/temp.linux-x86_64-cpython-39/_ext_src/src/group_points_gpu.o	12c3d956b486f9d
+3	23693	1735288869527023808	/data4/lj/PoseEstimation/lib/pointnet2/build/temp.linux-x86_64-cpython-39/_ext_src/src/sampling.o	a0264d9e20f3c46d
+1	23898	1735288869735024763	/data4/lj/PoseEstimation/lib/pointnet2/build/temp.linux-x86_64-cpython-39/_ext_src/src/bindings.o	b1b42cef34315fb3
+2	23964	1735288869799025057	/data4/lj/PoseEstimation/lib/pointnet2/build/temp.linux-x86_64-cpython-39/_ext_src/src/interpolate.o	d37ea9d632012150
+0	23994	1735288869835025223	/data4/lj/PoseEstimation/lib/pointnet2/build/temp.linux-x86_64-cpython-39/_ext_src/src/ball_query.o	6737b06d18838e51
+1	24078	1735288869915025590	/data4/lj/PoseEstimation/lib/pointnet2/build/temp.linux-x86_64-cpython-39/_ext_src/src/group_points.o	e400687a86eeab00

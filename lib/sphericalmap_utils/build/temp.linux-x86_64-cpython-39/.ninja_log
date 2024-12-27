@@ -1,0 +1,4 @@
+# ninja log v5
+0	17061	1735288904667185547	/data4/lj/PoseEstimation/lib/sphericalmap_utils/build/temp.linux-x86_64-cpython-39/data4/lj/PoseEstimation/lib/sphericalmap_utils/_ext_src/src/sphericalmap_cuda.o	314558c18c22f879
+0	21383	1735288908975205427	/data4/lj/PoseEstimation/lib/sphericalmap_utils/build/temp.linux-x86_64-cpython-39/data4/lj/PoseEstimation/lib/sphericalmap_utils/_ext_src/src/bindings.o	e0355db995cd0aab
+1	21998	1735288909607208345	/data4/lj/PoseEstimation/lib/sphericalmap_utils/build/temp.linux-x86_64-cpython-39/data4/lj/PoseEstimation/lib/sphericalmap_utils/_ext_src/src/sphericalmap.o	a4855c606bf450a0
