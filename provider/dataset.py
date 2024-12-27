@@ -88,8 +88,7 @@ class TrainingDataset(Dataset):
         if self.dataset == 'REAL275':
             num_syn_img = len(self.syn_img_list)
             num_syn_img, num_real_img = len(self.syn_img_list), len(self.real_img_list)
-            num_syn_img_per_epoch = int(self.num_img_per_epoch*0.75)
-            #num_syn_img_per_epoch = 0 #CHANGE THIS
+            num_syn_img_per_epoch = int(self.num_img_per_epoch * 0.75)
             num_real_img_per_epoch = self.num_img_per_epoch - num_syn_img_per_epoch
 
             if num_syn_img <= num_syn_img_per_epoch:
@@ -227,7 +226,17 @@ class TrainingDataset(Dataset):
             pts_raw = pts_raw.reshape(h, w, 3)
             pts_raw = np.where((mask == 0)[:, :, None], np.nan, pts_raw)
             pts_raw = cv2.resize(pts_raw, dsize=(self.num_patches, self.num_patches), interpolation=cv2.INTER_NEAREST)
+            
             mask = np.logical_not(np.isnan(pts_raw)).all(axis=-1) # 干啥的？？
+            # choose
+            choose = mask.flatten().nonzero()[0]
+            if len(choose) <= 0:
+                return None
+            elif len(choose) <= self.sample_num:
+                choose_idx = np.random.choice(np.arange(len(choose)), self.sample_num)
+            else:
+                choose_idx = np.random.choice(np.arange(len(choose)), self.sample_num, replace=False)
+            choose = choose[choose_idx]
 
             if cat_id in self.sym_ids:
                 theta_x = rotation[0, 0] + rotation[2, 2]
