@@ -10,3 +10,5 @@ pip install .
 cd ../sphericalmap_utils/
 pip install .
 ```
+
+python train.py --gpus 0 --mod r

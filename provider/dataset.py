@@ -1,6 +1,8 @@
 import os
 import json
 import math
+import glob
+import time
 
 import cv2
 import torch
@@ -19,57 +21,31 @@ class TrainingDataset(Dataset):
         self.dataset = dataset
         self.mode = mode
         self.num_img_per_epoch = num_img_per_epoch
+
         self.resolution = resolution
         self.ds_rate = ds_rate
-        self.num_patches = num_patches
+        self.sample_num = self.config.sample_num
+        self.data_dir = config.data_dir
 
-        try: 
-            self.sample_num = self.config.sample_num
-            self.data_dir = config.data_dir
-        except:
-            self.sample_num = self.config['sample_num']
-            self.data_dir = config['data_dir']
-        
+        self.num_patches = num_patches        
 
-        self.syn_intrinsics = [577.5, 577.5, 319.5, 239.5]
         syn_img_path = 'camera/train_list.txt'
+        self.syn_intrinsics = [577.5, 577.5, 319.5, 239.5]
         self.syn_img_list = [os.path.join(syn_img_path.split('/')[0], line.rstrip('\n')) for line in open(os.path.join(self.data_dir, syn_img_path))]
-        syn_category_path = 'camera/train_category_dict.json'
-        self.syn_category_dict = json.load(open(os.path.join(self.data_dir, syn_category_path)))
-        syn_category_dict_tmp = self.syn_category_dict
-        for cls in syn_category_dict_tmp.keys():
-            syn_category_dict_tmp[cls] = [[x[0], x[1], 'syn'] for x in syn_category_dict_tmp[cls]]
-        self.reference_category_dict = syn_category_dict_tmp
         print('{} synthetic images are found.'.format(len(self.syn_img_list)))
 
 
         if self.dataset == 'REAL275':
-            self.real_intrinsics = [591.0125, 590.16775, 322.525, 244.11084]
             real_img_path = 'real/train_list.txt'
+            self.real_intrinsics = [591.0125, 590.16775, 322.525, 244.11084]
             self.real_img_list = [os.path.join(real_img_path.split('/')[0], line.rstrip('\n')) for line in open(os.path.join(self.data_dir, real_img_path))]
-            real_category_path = 'real/train_category_dict.json'
-            self.real_category_dict = json.load(open(os.path.join(self.data_dir, real_category_path)))
-            real_category_dict_tmp = self.real_category_dict
-            for cls in real_category_dict_tmp.keys():
-                real_category_dict_tmp[cls] = [[x[0], x[1], 'real'] for x in real_category_dict_tmp[cls]]
-            self.reference_category_dict = {cat: self.reference_category_dict[cat] + real_category_dict_tmp[cat] for cat in self.reference_category_dict.keys()}
             print('{} real images are found.'.format(len(self.real_img_list)))
 
-
-        # RGB图像增强
         self.colorjitter = transforms.ColorJitter(0.2, 0.2, 0.2, 0.05)
-
-        # get_item中用到 有效的训练图片
-        self.cls_list = sorted(list(self.reference_category_dict.keys()))
         self.xmap = np.array([[i for i in range(640)] for j in range(480)])
         self.ymap = np.array([[j for i in range(640)] for j in range(480)])
         self.sym_ids = [0, 1, 3]    # 0-indexed
         self.norm_scale = 1000.0    # normalization scale
-        
-        self.feature_instance_list = []
-        for cls in self.cls_list:
-            num_instance = len(self.reference_category_dict[cls])
-            self.feature_instance_list += [(cls, i) for i in range(num_instance)]
 
         if self.num_img_per_epoch != -1:
             self.reset()
@@ -155,8 +131,8 @@ class TrainingDataset(Dataset):
         rmin, rmax, cmin, cmax = get_bbox(gts['bboxes'][idx])
         mask = np.equal(mask, gts['instance_ids'][idx])
         mask = np.logical_and(mask , depth > 0)
-        mask = mask[rmin:rmax, cmin:cmax]
-        h, w = mask.shape
+
+        h, w = mask[rmin:rmax, cmin:cmax].shape # secondpose change
 
         # choose
         choose = mask[rmin:rmax, cmin:cmax].flatten().nonzero()[0]
@@ -224,6 +200,7 @@ class TrainingDataset(Dataset):
             pts = pts / np.linalg.norm(size) * noise_s
             
             pts_raw = pts_raw.reshape(h, w, 3)
+            mask = mask[rmin:rmax, cmin:cmax]
             pts_raw = np.where((mask == 0)[:, :, None], np.nan, pts_raw)
             pts_raw = cv2.resize(pts_raw, dsize=(self.num_patches, self.num_patches), interpolation=cv2.INTER_NEAREST)
             
@@ -290,5 +267,117 @@ class TrainingDataset(Dataset):
             ret_dict['phi_label'] = torch.IntTensor([phi_label]).long()
             ret_dict['vp_rotation_label'] = torch.FloatTensor(vp_rotation)
             ret_dict['ip_rotation_label'] = torch.FloatTensor(ip_rotation)
+
+        return ret_dict
+    
+class TestingDataset():
+    def __init__(self, config, dataset='REAL275', resolution=64):
+        self.dataset = dataset
+        self.resolution = resolution
+        self.data_dir = config.data_dir
+        self.sample_num = config.sample_num
+
+        result_pkl_list = glob.glob(os.path.join(self.data_dir, 'segmentation_results', dataset, 'results_*.pkl'))
+        self.result_pkl_list = sorted(result_pkl_list)
+        n_image = len(result_pkl_list)
+        print('no. of test images: {}\n'.format(n_image))
+
+        self.xmap = np.array([[i for i in range(640)] for j in range(480)])
+        self.ymap = np.array([[j for i in range(640)] for j in range(480)])
+        self.sym_ids = [0, 1, 3]    # 0-indexed
+        self.norm_scale = 1000.0    # normalization scale
+        if dataset == 'REAL275':
+            self.intrinsics = [591.0125, 590.16775, 322.525, 244.11084]
+        else:
+            self.intrinsics = [577.5, 577.5, 319.5, 239.5]
+
+
+    def __len__(self):
+        return len(self.result_pkl_list)
+
+    def __getitem__(self, index):
+        path = self.result_pkl_list[index]
+
+        with open(path, 'rb') as f:
+            pred_data = cPickle.load(f)
+
+        image_path = os.path.join(self.data_dir, pred_data['image_path'][5:])
+        pred_mask = pred_data['pred_masks']
+        num_instance = len(pred_data['pred_class_ids'])
+
+        # rgb
+        rgb = cv2.imread(image_path + '_color.png')[:, :, :3]
+        rgb = rgb[:, :, ::-1] #480*640*3
+
+        # pts
+        cam_fx, cam_fy, cam_cx, cam_cy = self.intrinsics
+        depth = load_depth(image_path) #480*640
+        if self.dataset == 'REAL275':
+            depth = fill_missing(depth, self.norm_scale, 1)
+
+        xmap = self.xmap
+        ymap = self.ymap
+        pts2 = depth.copy() / self.norm_scale
+        pts0 = (xmap - cam_cx) * pts2 / cam_fx
+        pts1 = (ymap - cam_cy) * pts2 / cam_fy
+        pts = np.transpose(np.stack([pts0, pts1, pts2]), (1,2,0)).astype(np.float32) # 480*640*3
+
+        all_rgb = []
+        all_pts = []
+        all_center = []
+        all_cat_ids = []
+        flag_instance = torch.zeros(num_instance) == 1
+
+        for j in range(num_instance):
+            inst_mask = 255 * pred_mask[:, :, j].astype('uint8')
+            mask = inst_mask > 0
+            mask = np.logical_and(mask, depth>0)
+            if np.sum(mask) > 16:
+                rmin, rmax, cmin, cmax = get_bbox_from_mask(mask)
+                choose = mask[rmin:rmax, cmin:cmax].flatten().nonzero()[0]
+                cat_id = pred_data['pred_class_ids'][j] - 1 # convert to 0-indexed
+
+                instance_pts = pts[rmin:rmax, cmin:cmax, :].reshape((-1, 3))[choose, :].copy()
+                instance_rgb = rgb[rmin:rmax, cmin:cmax, :].copy()
+                instance_rgb = np.array(instance_rgb).astype(np.float32).reshape((-1, 3))[choose, :] / 255.0
+
+                center = np.mean(instance_pts, axis=0)
+                instance_pts = instance_pts - center[np.newaxis, :]
+
+                if instance_pts.shape[0] <= self.sample_num:
+                    choose_idx = np.random.choice(np.arange(instance_pts.shape[0]), self.sample_num)
+                else:
+                    choose_idx = np.random.choice(np.arange(instance_pts.shape[0]), self.sample_num, replace=False)
+                instance_pts = instance_pts[choose_idx, :]
+                instance_rgb = instance_rgb[choose_idx, :]
+
+                all_pts.append(torch.FloatTensor(instance_pts))
+                all_rgb.append(torch.FloatTensor(instance_rgb))
+                all_center.append(torch.FloatTensor(center))
+                all_cat_ids.append(torch.IntTensor([cat_id]).long())
+                flag_instance[j] = 1
+
+        ret_dict = {}
+
+        ret_dict['gt_class_ids'] = torch.tensor(pred_data['gt_class_ids'])
+        ret_dict['gt_bboxes'] = torch.tensor(pred_data['gt_bboxes'])
+        ret_dict['gt_RTs'] = torch.tensor(pred_data['gt_RTs'])
+        ret_dict['gt_scales'] = torch.tensor(pred_data['gt_scales'])
+        ret_dict['gt_handle_visibility'] = torch.tensor(pred_data['gt_handle_visibility'])
+        ret_dict['index'] = index
+
+        if len(all_pts) == 0:
+            ret_dict['pred_class_ids'] = torch.tensor(pred_data['pred_class_ids'])
+            ret_dict['pred_bboxes'] = torch.tensor(pred_data['pred_bboxes'])
+            ret_dict['pred_scores'] = torch.tensor(pred_data['pred_scores'])
+
+        else:
+            ret_dict['pts'] = torch.stack(all_pts) # N*3
+            ret_dict['rgb'] = torch.stack(all_rgb)
+            ret_dict['center'] = torch.stack(all_center)
+            ret_dict['category_label'] = torch.stack(all_cat_ids).squeeze(1)
+            ret_dict['pred_class_ids'] = torch.tensor(pred_data['pred_class_ids'])[flag_instance==1]
+            ret_dict['pred_bboxes'] = torch.tensor(pred_data['pred_bboxes'])[flag_instance==1]
+            ret_dict['pred_scores'] = torch.tensor(pred_data['pred_scores'])[flag_instance==1]
 
         return ret_dict
