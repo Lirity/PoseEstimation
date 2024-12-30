@@ -12,3 +12,5 @@ pip install .
 ```
 
 python train.py --gpus 0 --mod r
+
+python test.py --gpus 2 --test_epoch [YOUR EPOCH]

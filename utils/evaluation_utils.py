@@ -990,7 +990,7 @@ def evaluate(path, logger=None):
                             iou_3d_thresholds=[0.10, 0.25, 0.50, 0.75], logger=logger)
 
     print("Compute CATRE IoU mAP: ")
-    from CATRE_evaluation_utils import compute_CATRE_IoU
+    from utils.CATRE_evaluation_utils import compute_CATRE_IoU
     compute_CATRE_IoU(final_results, synset_names,
                             iou_3d_thresholds=[0.10, 0.25, 0.50, 0.75],
                             logger=logger)

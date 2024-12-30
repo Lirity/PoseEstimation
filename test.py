@@ -1,7 +1,12 @@
 import os
+import sys
 import random
 import logging
 import argparse
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.join(BASE_DIR, 'lib', 'sphericalmap_utils'))
+sys.path.append(os.path.join(BASE_DIR, 'lib', 'pointnet2'))
 
 import torch
 import gorilla
@@ -34,7 +39,7 @@ def init():
     cfg.save_path = os.path.join(cfg.log_dir, 'results')
     if not os.path.isdir(cfg.save_path):
         os.makedirs(cfg.save_path)
-    logger = get_logger(level_print=logging.INFO, level_save=logging.INFO, path_file=cfg.log_dir+"/testing_logger.log")
+    logger = get_logger(level_print=logging.INFO, level_save=logging.INFO, path_file=cfg.save_path + "/testing_logger.log")
     gorilla.utils.set_cuda_visible_devices(gpu_ids=cfg.gpus)
     random.seed(cfg.rd_seed)
     torch.manual_seed(cfg.rd_seed)
@@ -50,14 +55,14 @@ def load_model(cfg):
         r_model = torch.nn.DataParallel(r_model, range(len(cfg.gpus.split(","))))
     ts_model = ts_model.cuda() 
     r_model = r_model.cuda()
-    checkpoint = os.path.join(cfg.log_dir, 'ts', 'epoch_' + str(0) + '.pth')
+    checkpoint = os.path.join(cfg.log_dir, 'ts', 'epoch_' + 'test' + '.pth')
     gorilla.solver.load_checkpoint(model=ts_model, filename=checkpoint)
     checkpoint = os.path.join(cfg.log_dir, 'r', 'epoch_' + str(cfg.test_epoch) + '.pth')
     gorilla.solver.load_checkpoint(model=r_model, filename=checkpoint)
     return ts_model, r_model
 
 def load_data(cfg):
-    dataset = TestingDataset(cfg.test, cfg.dataset, cfg.resolution, cfg.ds_rate)
+    dataset = TestingDataset(cfg.test, cfg.dataset, cfg.resolution)
     dataloder = torch.utils.data.DataLoader(
             dataset,
             batch_size=1,
@@ -68,7 +73,7 @@ def load_data(cfg):
     return dataloder
 
 def run():
-    logger, cfg = init()
+    cfg, logger = init()
     logger.info("start test logging...")
     ts_model, r_model = load_model(cfg)
     dataloder = load_data(cfg)

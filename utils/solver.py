@@ -1,11 +1,15 @@
 import os
 import time
 
+import cv2
 import torch
 import gorilla
 import numpy as np
+import _pickle as cPickle
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
+
+from utils.draw_utils import draw_detections
 
 class Solver(gorilla.solver.BaseSolver):
     def __init__(self, model, loss, dataloaders, logger, cfg):
@@ -233,7 +237,7 @@ def test_func(ts_model, r_model, dataloder, save_path):
 
                 inputs['rotation_label'] = torch.FloatTensor(gt_rotation).cuda()
                 # import pdb;pdb.set_trace()
-                end_points = r_model.inference(inputs)
+                end_points = r_model(inputs)
                 pred_rotation = end_points['pred_rotation']
                 #pred_rotation = pred_rotation@ref_data['rotation_label'].cuda().float()
                 pred_rotation = pred_rotation[:,:,(1,2,0)]
@@ -272,11 +276,6 @@ def test_func(ts_model, r_model, dataloder, save_path):
                 image_path = os.path.join(
                     '/media/student/Data/yamei/data/NOCS/', image_path)
                 image_path_parsing = image_path.split('/')
-
-                # rgb
-                import cv2
-                # import numpy as np
-                from draw_utils import draw_detections
 
                 image = cv2.imread(image_path + '_color.png')[:, :, :3]
                 image = image[:, :, ::-1] #480*640*3
