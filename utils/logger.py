@@ -1,6 +1,7 @@
 import logging
 
-def get_logger(level_print, level_save, path_file, name_logger="logger"):
+
+def init_logger(level_print, level_save, path_file, name_logger="logger"):
     # level: logging.INFO / logging.WARN
     logger = logging.getLogger(name_logger)
     logger.setLevel(level=logging.DEBUG)

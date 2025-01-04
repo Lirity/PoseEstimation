@@ -1,4 +1,4 @@
-exp_name: tester
+exp_name: change_bs
 max_epoch : 60 
 rd_seed: 1
 n_cls: 6
@@ -8,21 +8,21 @@ mode: epoch
 per_val: 10
 per_write: 50
 
-num_mini_batch_per_epoch: 5000
+num_mini_batch_per_epoch: 1250
 num_patches: 15
 
 optimizer:
   type : Adam
-  lr   : 0.001
+  lr   : 0.004
   betas: [0.5, 0.999]
   eps  : 0.000001
   weight_decay: 0
 
 lr_scheduler:
   type: WarmupCosineLR
-  max_iters: 200000
+  max_iters: 50000
   warmup_factor: 0.001
-  warmup_iters: 2000
+  warmup_iters: 500
 
 loss:
   vp_weight: 100.0
@@ -36,7 +36,7 @@ train_dataset:
   angle_range: 20
 
 train_dataloader:
-  bs: 48
+  bs: 192
   num_workers: 16
   shuffle: True
   drop_last: True

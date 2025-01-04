@@ -12,7 +12,4 @@ for i, data in enumerate(dataloaders["train"]):
     print(f'{i}: cost: {time.time() - st}s')
     st = time.time()
 
-    if i > 100:
-        break
-
 print(f'all cost: {time.time() - start}s')

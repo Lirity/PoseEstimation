@@ -12,8 +12,11 @@ from PIL import Image
 from torch.utils.data import Dataset
 from utils.data_utils import *
 
+
 class TrainingDataset(Dataset):
-    def __init__(self, config, dataset='REAL275', mode='ts', num_img_per_epoch=-1, resolution=64, ds_rate=2, num_patches=15):
+    def __init__(self, config, dataset='REAL275', mode='ts',
+                 num_img_per_epoch=-1, resolution=64, ds_rate=2,
+                 num_patches=15):
         np.random.seed(0)
 
         self.config = config
@@ -26,18 +29,26 @@ class TrainingDataset(Dataset):
         self.sample_num = self.config.sample_num
         self.data_dir = config.data_dir
 
-        self.num_patches = num_patches        
+        self.num_patches = num_patches
 
         syn_img_path = 'camera/train_list.txt'
         self.syn_intrinsics = [577.5, 577.5, 319.5, 239.5]
-        self.syn_img_list = [os.path.join(syn_img_path.split('/')[0], line.rstrip('\n')) for line in open(os.path.join(self.data_dir, syn_img_path))]
+        self.syn_img_list = [os.path.join(
+            syn_img_path.split('/')[0],
+            line.rstrip('\n'))
+            for line in open(
+            os.path.join(self.data_dir, syn_img_path))]
         print('{} synthetic images are found.'.format(len(self.syn_img_list)))
-
 
         if self.dataset == 'REAL275':
             real_img_path = 'real/train_list.txt'
             self.real_intrinsics = [591.0125, 590.16775, 322.525, 244.11084]
-            self.real_img_list = [os.path.join(real_img_path.split('/')[0], line.rstrip('\n')) for line in open(os.path.join(self.data_dir, real_img_path))]
+            self.real_img_list = [os.path.join(
+                real_img_path.split('/')[0],
+                line.rstrip('\n'))
+                for line in open(
+                os.path.join(
+                    self.data_dir, real_img_path))]
             print('{} real images are found.'.format(len(self.real_img_list)))
 
         self.colorjitter = transforms.ColorJitter(0.2, 0.2, 0.2, 0.05)
@@ -49,6 +60,12 @@ class TrainingDataset(Dataset):
         if self.num_img_per_epoch != -1:
             self.reset()
 
+        syn_model_path = '/data4/LJ/datasets/nocs/obj_models/camera_train.pkl'
+        real_model_path = '/data4/LJ/datasets/nocs/obj_models/real_train.pkl'
+        self.model_dict = {}
+        self.model_dict.update(cPickle.load(open(syn_model_path, 'rb')))
+        self.model_dict.update(cPickle.load(open(real_model_path, 'rb')))
+
     def __len__(self):
         if self.num_img_per_epoch == -1:
             if self.dataset == 'REAL275':
@@ -57,24 +74,30 @@ class TrainingDataset(Dataset):
                 return len(self.syn_img_list)
         else:
             return self.num_img_per_epoch
-        
+
     def reset(self):
         assert self.num_img_per_epoch != -1
         if self.dataset == 'REAL275':
             num_syn_img = len(self.syn_img_list)
-            num_syn_img, num_real_img = len(self.syn_img_list), len(self.real_img_list)
+            num_syn_img, num_real_img = len(
+                self.syn_img_list), len(
+                self.real_img_list)
             num_syn_img_per_epoch = int(self.num_img_per_epoch * 0.75)
             num_real_img_per_epoch = self.num_img_per_epoch - num_syn_img_per_epoch
 
             if num_syn_img <= num_syn_img_per_epoch:
-                syn_img_index = np.random.choice(num_syn_img, num_syn_img_per_epoch)
+                syn_img_index = np.random.choice(
+                    num_syn_img, num_syn_img_per_epoch)
             else:
-                syn_img_index = np.random.choice(num_syn_img, num_syn_img_per_epoch, replace=False)
+                syn_img_index = np.random.choice(
+                    num_syn_img, num_syn_img_per_epoch, replace=False)
 
             if num_real_img <= num_real_img_per_epoch:
-                real_img_index = np.random.choice(num_real_img, num_real_img_per_epoch)
+                real_img_index = np.random.choice(
+                    num_real_img, num_real_img_per_epoch)
             else:
-                real_img_index = np.random.choice(num_real_img, num_real_img_per_epoch, replace=False)
+                real_img_index = np.random.choice(
+                    num_real_img, num_real_img_per_epoch, replace=False)
             real_img_index = -real_img_index - 1
             self.img_index = np.hstack([syn_img_index, real_img_index])
 
@@ -82,16 +105,19 @@ class TrainingDataset(Dataset):
             num_syn_img = len(self.syn_img_list)
             num_syn_img_per_epoch = int(self.num_img_per_epoch)
             if num_syn_img <= num_syn_img_per_epoch:
-                syn_img_index = np.random.choice(num_syn_img, num_syn_img_per_epoch)
+                syn_img_index = np.random.choice(
+                    num_syn_img, num_syn_img_per_epoch)
             else:
-                syn_img_index = np.random.choice(num_syn_img, num_syn_img_per_epoch, replace=False)
+                syn_img_index = np.random.choice(
+                    num_syn_img, num_syn_img_per_epoch, replace=False)
             self.img_index = syn_img_index
-        
+
         np.random.shuffle(self.img_index)
-     
+
     '''
     index -> data_dict
     '''
+
     def __getitem__(self, index):
         while True:
             image_index = self.img_index[index]
@@ -104,12 +130,14 @@ class TrainingDataset(Dataset):
     def _read_data(self, image_index):
         if image_index >= 0:
             img_type = 'syn'
-            img_path = os.path.join(self.data_dir, self.syn_img_list[image_index])
+            img_path = os.path.join(
+                self.data_dir, self.syn_img_list[image_index])
             cam_fx, cam_fy, cam_cx, cam_cy = self.syn_intrinsics
         else:
             img_type = 'real'
             image_index = -image_index - 1
-            img_path = os.path.join(self.data_dir, self.real_img_list[image_index])
+            img_path = os.path.join(
+                self.data_dir, self.real_img_list[image_index])
             cam_fx, cam_fy, cam_cx, cam_cy = self.real_intrinsics
 
         if self.dataset == 'REAL275':
@@ -122,57 +150,73 @@ class TrainingDataset(Dataset):
         with open(img_path + '_label.pkl', 'rb') as f:
             gts = cPickle.load(f)
         num_instance = len(gts['instance_ids'])
-        assert(len(gts['class_ids'])==len(gts['instance_ids']))
+        assert (len(gts['class_ids']) == len(gts['instance_ids']))
         mask = cv2.imread(img_path + '_mask.png')[:, :, 2]
 
         idx = np.random.randint(0, num_instance)
-        cat_id = gts['class_ids'][idx] - 1 # convert to 0-indexed
+        cat_id = gts['class_ids'][idx] - 1  # convert to 0-indexed
         rmin, rmax, cmin, cmax = get_bbox(gts['bboxes'][idx])
         mask = np.equal(mask, gts['instance_ids'][idx])
-        mask = np.logical_and(mask , depth > 0)
+        mask = np.logical_and(mask, depth > 0)
 
-        h, w = mask[rmin:rmax, cmin:cmax].shape # secondpose change
+        h, w = mask[rmin:rmax, cmin:cmax].shape  # secondpose change
 
         # choose
         choose = mask[rmin:rmax, cmin:cmax].flatten().nonzero()[0]
         if len(choose) <= 0:
             return None
         elif len(choose) <= self.sample_num:
-            choose_idx = np.random.choice(np.arange(len(choose)), self.sample_num)
+            choose_idx = np.random.choice(
+                np.arange(len(choose)),
+                self.sample_num)
         else:
-            choose_idx = np.random.choice(np.arange(len(choose)), self.sample_num, replace=False)
+            choose_idx = np.random.choice(
+                np.arange(len(choose)),
+                self.sample_num, replace=False)
         choose = choose[choose_idx]
 
         # pts
-        pts2 = depth.copy()[rmin:rmax, cmin:cmax].reshape((-1)) / self.norm_scale
-        pts0 = (self.xmap[rmin:rmax, cmin:cmax].reshape((-1)) - cam_cx) * pts2 / cam_fx
-        pts1 = (self.ymap[rmin:rmax, cmin:cmax].reshape((-1)) - cam_cy) * pts2 / cam_fy
-        pts = np.transpose(np.stack([pts0, pts1, pts2]), (1,0)).astype(np.float32) # 480*640*3
-        pts = pts + np.clip(0.001*np.random.randn(pts.shape[0], 3), -0.005, 0.005)
+        pts2 = depth.copy()[
+            rmin:rmax, cmin:cmax].reshape(
+            (-1)) / self.norm_scale
+        pts0 = (self.xmap[rmin:rmax, cmin:cmax].reshape(
+            (-1)) - cam_cx) * pts2 / cam_fx
+        pts1 = (self.ymap[rmin:rmax, cmin:cmax].reshape(
+            (-1)) - cam_cy) * pts2 / cam_fy
+        pts = np.transpose(
+            np.stack([pts0, pts1, pts2]),
+            (1, 0)).astype(
+            np.float32)  # 480*640*3
+        pts = pts + np.clip(0.001 * np.random.randn(
+            pts.shape[0], 3), -0.005, 0.005)
         pts_raw = pts
         pts = pts[choose, :]
 
         # rgb
         rgb = cv2.imread(img_path + '_color.png')[:, :, :3]
-        rgb = rgb[:, :, ::-1] #480*640*3
+        rgb = rgb[:, :, ::-1]  # 480*640*3
         rgb = rgb[rmin:rmax, cmin:cmax, :]
         rgb = self.colorjitter(Image.fromarray(np.uint8(rgb)))
         rgb = np.array(rgb)
         if img_type == 'syn':
             rgb = rgb_add_noise(rgb)
         rgb_raw = rgb.astype(np.float32) / 255.0
-        rgb_raw = cv2.resize(rgb_raw, dsize=(self.num_patches*14, self.num_patches*14), interpolation=cv2.INTER_NEAREST)
+        rgb_raw = cv2.resize(
+            rgb_raw,
+            dsize=(
+                self.num_patches * 14,
+                self.num_patches * 14),
+            interpolation=cv2.INTER_NEAREST)
         rgb = rgb.astype(np.float32).reshape((-1, 3))[choose, :] / 255.0
-        
 
         # gt
         translation = gts['translations'][idx].astype(np.float32)
         rotation = gts['rotations'][idx].astype(np.float32)
         size = gts['scales'][idx] * gts['sizes'][idx].astype(np.float32)
 
-
         if hasattr(self.config, 'random_rotate') and self.config.random_rotate:
-            pts, rotation = random_rotate(pts, rotation, translation, self.config.angle_range)
+            pts, rotation = random_rotate(
+                pts, rotation, translation, self.config.angle_range)
 
         if self.mode == 'ts':
             pts, size = random_scale(pts, size, rotation, translation)
@@ -188,8 +232,10 @@ class TrainingDataset(Dataset):
             ret_dict = {}
             ret_dict['pts'] = torch.FloatTensor(pts)    # (2048, 3)
             ret_dict['rgb'] = torch.FloatTensor(rgb)    # (2048, 3)
-            ret_dict['category_label'] = torch.IntTensor([cat_id]).long() # [0]
-            ret_dict['translation_label'] = torch.FloatTensor(translation)  # (3,)
+            ret_dict['category_label'] = torch.IntTensor(
+                [cat_id]).long()  # [0]
+            ret_dict['translation_label'] = torch.FloatTensor(
+                translation)  # (3,)
             ret_dict['size_label'] = torch.FloatTensor(size)    # (3,)
 
         else:
@@ -197,30 +243,45 @@ class TrainingDataset(Dataset):
             noise_s = np.random.uniform(0.8, 1.2, 1)
             pts = pts - translation[None, :] - noise_t[None, :]
             pts = pts / np.linalg.norm(size) * noise_s
-            
+
+            # gt_camera
+            pc_nocs = self.model_dict[gts['model_list']
+                                      [idx]].astype(np.float32)
+            pts_c = (rotation @ pc_nocs.T).T - noise_t[None, :]
+            pts_c = pts_c * noise_s
+
             pts_raw = pts_raw.reshape(h, w, 3)
             mask = mask[rmin:rmax, cmin:cmax]
             pts_raw = np.where((mask == 0)[:, :, None], np.nan, pts_raw)
-            pts_raw = cv2.resize(pts_raw, dsize=(self.num_patches, self.num_patches), interpolation=cv2.INTER_NEAREST)
-            
-            mask = np.logical_not(np.isnan(pts_raw)).all(axis=-1) # 干啥的？？
+            pts_raw = cv2.resize(
+                pts_raw,
+                dsize=(
+                    self.num_patches,
+                    self.num_patches),
+                interpolation=cv2.INTER_NEAREST)
+
+            mask = np.logical_not(np.isnan(pts_raw)).all(axis=-1)  # 干啥的？？
             # choose
             choose = mask.flatten().nonzero()[0]
             if len(choose) <= 0:
                 return None
             elif len(choose) <= self.sample_num:
-                choose_idx = np.random.choice(np.arange(len(choose)), self.sample_num)
+                choose_idx = np.random.choice(
+                    np.arange(len(choose)),
+                    self.sample_num)
             else:
-                choose_idx = np.random.choice(np.arange(len(choose)), self.sample_num, replace=False)
+                choose_idx = np.random.choice(
+                    np.arange(len(choose)),
+                    self.sample_num, replace=False)
             choose = choose[choose_idx]
 
             if cat_id in self.sym_ids:
                 theta_x = rotation[0, 0] + rotation[2, 2]
                 theta_y = rotation[0, 2] - rotation[2, 0]
                 r_norm = math.sqrt(theta_x**2 + theta_y**2)
-                s_map = np.array([[theta_x/r_norm, 0.0, -theta_y/r_norm],
-                                    [0.0,            1.0,  0.0           ],
-                                    [theta_y/r_norm, 0.0,  theta_x/r_norm]])
+                s_map = np.array([[theta_x / r_norm, 0.0, -theta_y / r_norm],
+                                  [0.0, 1.0, 0.0],
+                                  [theta_y / r_norm, 0.0, theta_x / r_norm]])
                 rotation = rotation @ s_map
 
                 asym_flag = 0.0
@@ -228,33 +289,34 @@ class TrainingDataset(Dataset):
                 asym_flag = 1.0
 
             # transform ZXY system to XYZ system
-            rotation = rotation[:, (2,0,1)]
+            rotation = rotation[:, (2, 0, 1)]
 
-            v = rotation[:,2] / (np.linalg.norm(rotation[:,2])+1e-8)
+            v = rotation[:, 2] / (np.linalg.norm(rotation[:, 2]) + 1e-8)
             rho = np.arctan2(v[1], v[0])
             if v[1] < 0:
-                rho += 2*np.pi
+                rho += 2 * np.pi
             phi = np.arccos(v[2])
 
             vp_rotation = np.array([
-                [np.cos(rho),-np.sin(rho),0],
-                [np.sin(rho), np.cos(rho),0],
-                [0,0,1]
+                [np.cos(rho), -np.sin(rho), 0],
+                [np.sin(rho), np.cos(rho), 0],
+                [0, 0, 1]
             ]) @ np.array([
-                [np.cos(phi),0,np.sin(phi)],
-                [0,1,0],
-                [-np.sin(phi),0,np.cos(phi)],
+                [np.cos(phi), 0, np.sin(phi)],
+                [0, 1, 0],
+                [-np.sin(phi), 0, np.cos(phi)],
             ])
             ip_rotation = vp_rotation.T @ rotation
 
-            rho_label = int(rho / (2*np.pi) * (self.resolution//self.ds_rate))
-            phi_label = int(phi/np.pi*(self.resolution//self.ds_rate))
+            rho_label = int(rho / (2 * np.pi) *
+                            (self.resolution // self.ds_rate))
+            phi_label = int(phi / np.pi * (self.resolution // self.ds_rate))
 
             ret_dict = {}
             ret_dict['rgb'] = torch.FloatTensor(rgb)
-            ret_dict['rgb_raw'] = torch.FloatTensor(rgb_raw) # (210, 210, 3)
+            ret_dict['rgb_raw'] = torch.FloatTensor(rgb_raw)  # (210, 210, 3)
             ret_dict['pts'] = torch.FloatTensor(pts)
-            ret_dict['pts_raw'] = torch.FloatTensor(pts_raw) # (210, 210, 3)
+            ret_dict['pts_raw'] = torch.FloatTensor(pts_raw)  # (210, 210, 3)
             ret_dict['choose'] = torch.IntTensor(choose).long()
             ret_dict['category_label'] = torch.IntTensor([cat_id]).long()
             ret_dict['asym_flag'] = torch.FloatTensor([asym_flag])
@@ -266,9 +328,16 @@ class TrainingDataset(Dataset):
             ret_dict['phi_label'] = torch.IntTensor([phi_label]).long()
             ret_dict['vp_rotation_label'] = torch.FloatTensor(vp_rotation)
             ret_dict['ip_rotation_label'] = torch.FloatTensor(ip_rotation)
+            ret_dict['pts_c_label'] = torch.FloatTensor(pts_c)
+
+            # import trimesh
+            # cloud_close = trimesh.points.PointCloud(np.concatenate((pts_c, pts), axis=0))
+            # scene = trimesh.Scene(cloud_close)
+            # scene.show()
 
         return ret_dict
-    
+
+
 class TestingDataset():
     def __init__(self, config, dataset='REAL275', resolution=64):
         self.dataset = dataset
@@ -277,7 +346,12 @@ class TestingDataset():
         self.sample_num = config.sample_num
         self.num_patches = 15
 
-        result_pkl_list = glob.glob(os.path.join(self.data_dir, 'segmentation_results', 'test_trainedwithMask', 'results_*.pkl'))
+        result_pkl_list = glob.glob(
+            os.path.join(
+                self.data_dir,
+                'segmentation_results',
+                'test_trainedwithMask',
+                'results_*.pkl'))
         self.result_pkl_list = sorted(result_pkl_list)
         n_image = len(result_pkl_list)
         print('no. of test images: {}\n'.format(n_image))
@@ -290,7 +364,6 @@ class TestingDataset():
             self.intrinsics = [591.0125, 590.16775, 322.525, 244.11084]
         else:
             self.intrinsics = [577.5, 577.5, 319.5, 239.5]
-
 
     def __len__(self):
         return len(self.result_pkl_list)
@@ -319,7 +392,10 @@ class TestingDataset():
         pts2 = depth.copy() / self.norm_scale
         pts0 = (xmap - cam_cx) * pts2 / cam_fx
         pts1 = (ymap - cam_cy) * pts2 / cam_fy
-        pts = np.transpose(np.stack([pts0, pts1, pts2]), (1, 2, 0)).astype(np.float32)  # 480*640*3
+        pts = np.transpose(
+            np.stack([pts0, pts1, pts2]),
+            (1, 2, 0)).astype(
+            np.float32)  # 480*640*3
 
         all_rgb = []
         all_pts = []
@@ -338,7 +414,8 @@ class TestingDataset():
             mask = np.logical_and(mask, depth > 0)
             if np.sum(mask) > 16:
                 rmin, rmax, cmin, cmax = get_bbox_from_mask(mask)
-                cat_id = pred_data['pred_class_ids'][j] - 1  # convert to 0-indexed
+                # convert to 0-indexed
+                cat_id = pred_data['pred_class_ids'][j] - 1
 
                 pts_raw = pts[rmin:rmax, cmin:cmax, :]
 
@@ -360,24 +437,40 @@ class TestingDataset():
                 instance_pts = instance_pts - center[np.newaxis, :]
                 pts_raw = pts_raw - center[np.newaxis, np.newaxis, :]
                 if instance_pts.shape[0] <= self.sample_num:
-                    choose_idx = np.random.choice(np.arange(instance_pts.shape[0]), self.sample_num)
+                    choose_idx = np.random.choice(
+                        np.arange(instance_pts.shape[0]),
+                        self.sample_num)
                 else:
-                    choose_idx = np.random.choice(np.arange(instance_pts.shape[0]), self.sample_num, replace=False)
+                    choose_idx = np.random.choice(
+                        np.arange(instance_pts.shape[0]),
+                        self.sample_num, replace=False)
                 instance_pts = instance_pts[choose_idx, :]
                 instance_rgb = instance_rgb[choose_idx, :]
 
-                rgb_raw = cv2.resize(rgb_raw, dsize=(self.num_patches * 14, self.num_patches * 14),
-                                        interpolation=cv2.INTER_NEAREST)
-                pts_raw = cv2.resize(pts_raw, dsize=(self.num_patches, self.num_patches),
-                                        interpolation=cv2.INTER_NEAREST)
+                rgb_raw = cv2.resize(
+                    rgb_raw,
+                    dsize=(
+                        self.num_patches * 14,
+                        self.num_patches * 14),
+                    interpolation=cv2.INTER_NEAREST)
+                pts_raw = cv2.resize(
+                    pts_raw,
+                    dsize=(
+                        self.num_patches,
+                        self.num_patches),
+                    interpolation=cv2.INTER_NEAREST)
                 mask = np.logical_not(np.isnan(pts_raw)).all(axis=-1)
                 choose = mask.flatten().nonzero()[0]
                 if len(choose) <= 0:
                     continue
                 elif len(choose) <= self.sample_num:
-                    choose_idx = np.random.choice(np.arange(len(choose)), self.sample_num)
+                    choose_idx = np.random.choice(
+                        np.arange(len(choose)),
+                        self.sample_num)
                 else:
-                    choose_idx = np.random.choice(np.arange(len(choose)), self.sample_num, replace=False)
+                    choose_idx = np.random.choice(
+                        np.arange(len(choose)),
+                        self.sample_num, replace=False)
                 choose = choose[choose_idx]
 
                 all_pts_raw.append(torch.FloatTensor(pts_raw))
@@ -396,17 +489,20 @@ class TestingDataset():
         ret_dict['gt_bboxes'] = torch.tensor(pred_data['gt_bboxes'])
         ret_dict['gt_RTs'] = torch.tensor(pred_data['gt_RTs'])
         ret_dict['gt_scales'] = torch.tensor(pred_data['gt_scales'])
-        ret_dict['gt_handle_visibility'] = torch.tensor(pred_data['gt_handle_visibility'])
+        ret_dict['gt_handle_visibility'] = torch.tensor(
+            pred_data['gt_handle_visibility'])
         # ret_dict['index'] = index
 
         if len(all_pts) == 0:
-            ret_dict['pred_class_ids'] = torch.tensor(pred_data['pred_class_ids'])
+            ret_dict['pred_class_ids'] = torch.tensor(
+                pred_data['pred_class_ids'])
             ret_dict['pred_bboxes'] = torch.tensor(pred_data['pred_bboxes'])
             ret_dict['pred_scores'] = torch.tensor(pred_data['pred_scores'])
 
         else:
             ret_dict['pts'] = torch.stack(all_pts)  # N*3
-            ret_dict['rand_rotation'] = torch.eye(3)[None, :, :].repeat(ret_dict['pts'].shape[0], 1, 1)
+            ret_dict['rand_rotation'] = torch.eye(
+                3)[None, :, :].repeat(ret_dict['pts'].shape[0], 1, 1)
             ret_dict['rgb'] = torch.stack(all_rgb)
             ret_dict['pts_raw'] = torch.stack(all_pts_raw)  # N*3
             ret_dict['rgb_raw'] = torch.stack(all_rgb_raw)
@@ -414,8 +510,11 @@ class TestingDataset():
             ret_dict['mask'] = torch.stack(all_mask)
             ret_dict['center'] = torch.stack(all_center)
             ret_dict['category_label'] = torch.stack(all_cat_ids).squeeze(1)
-            ret_dict['pred_class_ids'] = torch.tensor(pred_data['pred_class_ids'])[flag_instance == 1]
-            ret_dict['pred_bboxes'] = torch.tensor(pred_data['pred_bboxes'])[flag_instance == 1]
-            ret_dict['pred_scores'] = torch.tensor(pred_data['pred_scores'])[flag_instance == 1]
+            ret_dict['pred_class_ids'] = torch.tensor(
+                pred_data['pred_class_ids'])[flag_instance == 1]
+            ret_dict['pred_bboxes'] = torch.tensor(pred_data['pred_bboxes'])[
+                flag_instance == 1]
+            ret_dict['pred_scores'] = torch.tensor(pred_data['pred_scores'])[
+                flag_instance == 1]
 
         return ret_dict
