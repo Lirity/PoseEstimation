@@ -10,6 +10,7 @@ import gorilla
 
 from utils.solver import test_func
 from utils.logger import init_logger
+from utils.evaluation_utils import evaluate
 from provider.dataset import TestingDataset
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -28,7 +29,7 @@ def init_cfg():
     cfg.gpus = args.gpus
     gorilla.utils.set_cuda_visible_devices(gpu_ids=cfg.gpus)
     cfg.test_epoch = args.test_epoch
-    cfg.log_dir = os.path.join('log', args.dataset, cfg.exp_name, 'results')
+    cfg.log_dir = os.path.join('log', cfg.dataset, cfg.exp_name, 'results')
     if not os.path.isdir(cfg.log_dir):
         os.makedirs(cfg.log_dir)
     return cfg
@@ -49,8 +50,7 @@ def init_model(cfg):
     # TODO: adjust load checkpoint
     checkpoint = os.path.join('/data4/lj/PoseEstimation/log/common/ts.pth')
     gorilla.solver.load_checkpoint(model=ts_model, filename=checkpoint)
-    checkpoint = os.path.join(
-        cfg.log_dir, 'r', 'epoch_' + str(cfg.test_epoch) + '.pth')
+    checkpoint = os.path.join('log', cfg.dataset, cfg.exp_name, 'r', 'epoch_' + str(cfg.test_epoch) + '.pth')
     gorilla.solver.load_checkpoint(model=r_model, filename=checkpoint)
     return ts_model, r_model
 
@@ -96,7 +96,7 @@ def run():
     save_path = os.path.join(cfg.log_dir, 'epoch_' + str(cfg.test_epoch))
     if not os.path.isdir(save_path):
         os.makedirs(save_path)
-    test_func(ts_model, r_model, dataloder, save_path)
+        test_func(ts_model, r_model, dataloder, save_path)
     evaluate(save_path, logger)
     logger.info("end test logging...")
 
