@@ -146,7 +146,6 @@ class TrainingDataset(Dataset):
         num_instance = len(gts['instance_ids'])
         idx = np.random.randint(0, num_instance)
         cat_id = gts['class_ids'][idx] - 1  # convert to 0-indexed
-        
 
         # mask
         mask = cv2.imread(img_path + '_mask.png')[:, :, 2]
@@ -166,6 +165,16 @@ class TrainingDataset(Dataset):
         else:
             choose_idx = np.random.choice(np.arange(len(choose)), self.sample_num, replace=False)
         choose = choose[choose_idx]
+        
+        if settings['expand the range of the pts']:
+            choose = mask.flatten()
+            if len(choose) <= 0:
+                return None
+            elif len(choose) <= self.sample_num:
+                choose_idx = np.random.choice(np.arange(len(choose)), self.sample_num)
+            else:
+                choose_idx = np.random.choice(np.arange(len(choose)), self.sample_num, replace=False)
+            choose = choose[choose_idx]
 
         # pts
         pts2 = depth.copy()[rmin:rmax, cmin:cmax].reshape((-1)) / self.norm_scale
