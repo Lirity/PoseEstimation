@@ -249,11 +249,9 @@ def test_func(ts_model, r_model, dataloder, save_path):
                     'pts': data['pts'][0].cuda(),
                     'rgb_raw': data['rgb_raw'][0].cuda(),
                     'choose': data['choose'][0].cuda(),
-                    'mask': data['mask'][0].cuda(),
                     'pts_raw': data['pts_raw'][0].cuda(),
                     'category_label': data['category_label'][0].cuda(),
                     'center': data['center'][0].cuda(),
-
                 }
                 end_points = ts_model(inputs)
                 pred_translation = inputs['translation'] = end_points['translation']
@@ -262,7 +260,7 @@ def test_func(ts_model, r_model, dataloder, save_path):
 
                 pts = (inputs['pts'] - pred_translation.unsqueeze(1)
                        ) / (pred_scale + 1e-8).unsqueeze(2)
-                # import pdb;pdb.set_trace()
+
                 pts_raw = (inputs['pts_raw'] - pred_translation[:, None,
                            None, :]) / ((pred_scale + 1e-8)[:, None, None, :])
                 inputs['pts'] = pts.detach()
@@ -350,4 +348,27 @@ def test_func(ts_model, r_model, dataloder, save_path):
                 "Test [{}/{}][{}]: ".format(i + 1, len(dataloder), num_instance)
             )
 
+            t.update(1)
+
+def test_reconstruction(r_model, dataloder):
+    r_model.eval()
+    with tqdm(total=len(dataloder)) as t:
+        for i, data in enumerate(dataloder):
+            path = dataloder.dataset.result_pkl_list[i]
+            
+            if 'pts' in data.keys():
+                inputs = {
+                    'rgb': data['rgb'][0].cuda(),
+                    'pts': data['pts'][0].cuda(),
+                    'rgb_raw': data['rgb_raw'][0].cuda(),
+                    'choose': data['choose'][0].cuda(),
+                    'mask': data['mask'][0].cuda(),
+                    'pts_raw': data['pts_raw'][0].cuda(),
+                    'category_label': data['category_label'][0].cuda(),
+                    'center': data['center'][0].cuda(),
+                }
+                
+
+
+            t.set_description("Test [{}/{}][{}]: ".format(i + 1, len(dataloder), num_instance))    
             t.update(1)

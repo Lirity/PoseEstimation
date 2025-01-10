@@ -6,7 +6,7 @@ import time
 import cv2
 import torch
 import numpy as np
-import _pickle as cPickle
+import pickle
 import torchvision.transforms as transforms
 from PIL import Image
 from torch.utils.data import Dataset
@@ -60,11 +60,9 @@ class TrainingDataset(Dataset):
         if self.num_img_per_epoch != -1:
             self.reset()
 
-        syn_model_path = '/data4/LJ/datasets/nocs/obj_models/camera_train.pkl'
-        real_model_path = '/data4/LJ/datasets/nocs/obj_models/real_train.pkl'
         self.model_dict = {}
-        self.model_dict.update(cPickle.load(open(syn_model_path, 'rb')))
-        self.model_dict.update(cPickle.load(open(real_model_path, 'rb')))
+        self.model_dict.update(pickle.load(open(os.path.join(self.data_dir, 'obj_models/camera_train.pkl'), 'rb')))
+        self.model_dict.update(pickle.load(open(os.path.join(self.data_dir, 'obj_models/real_train.pkl'), 'rb')))
 
     def __len__(self):
         if self.num_img_per_epoch == -1:
@@ -148,7 +146,7 @@ class TrainingDataset(Dataset):
 
         # mask
         with open(img_path + '_label.pkl', 'rb') as f:
-            gts = cPickle.load(f)
+            gts = pickle.load(f)
         num_instance = len(gts['instance_ids'])
         assert (len(gts['class_ids']) == len(gts['instance_ids']))
         mask = cv2.imread(img_path + '_mask.png')[:, :, 2]
@@ -366,6 +364,7 @@ class TestingDataset():
 
         self.xmap = np.array([[i for i in range(640)] for j in range(480)])
         self.ymap = np.array([[j for i in range(640)] for j in range(480)])
+
         self.sym_ids = [0, 1, 3]    # 0-indexed
         self.norm_scale = 1000.0    # normalization scale
         if dataset == 'REAL275':
@@ -378,117 +377,92 @@ class TestingDataset():
 
     def __getitem__(self, index):
         path = self.result_pkl_list[index]
-
         with open(path, 'rb') as f:
-            pred_data = cPickle.load(f)
+            pred_data = pickle.load(f)
 
         image_path = os.path.join(self.data_dir, pred_data['image_path'][5:])
-        pred_mask = pred_data['pred_masks']
         num_instance = len(pred_data['pred_class_ids'])
+        pred_mask = pred_data['pred_masks'] # 480x640xn
 
         # rgb
         rgb = cv2.imread(image_path + '_color.png')[:, :, :3]
-        rgb = rgb[:, :, ::-1]  # 480*640*3
+        rgb = rgb[:, :, ::-1]  # 480x640x3
 
         # pts
         cam_fx, cam_fy, cam_cx, cam_cy = self.intrinsics
-        depth = load_depth(image_path)  # 480*640
+        depth = load_depth(image_path)  # 480x640
         if self.dataset == 'REAL275':
             depth = fill_missing(depth, self.norm_scale, 1)
-
         xmap = self.xmap
         ymap = self.ymap
         pts2 = depth.copy() / self.norm_scale
         pts0 = (xmap - cam_cx) * pts2 / cam_fx
         pts1 = (ymap - cam_cy) * pts2 / cam_fy
-        pts = np.transpose(
-            np.stack([pts0, pts1, pts2]),
-            (1, 2, 0)).astype(
-            np.float32)  # 480*640*3
+        pts = np.transpose(np.stack([pts0, pts1, pts2]), (1, 2, 0)).astype(np.float32)  # 480x640x3
 
-        all_rgb = []
-        all_pts = []
-        all_center = []
+        all_rgb, all_pts = [], []
         all_cat_ids = []
+        all_rgb_raw, all_pts_raw = [], []
+        all_center = []
+        all_choose = []
+        
         flag_instance = torch.zeros(num_instance) == 1
 
-        all_rgb_raw = []
-        all_pts_raw = []
-        all_mask = []
-        all_choose = []
-
-        for j in range(num_instance):
-            inst_mask = 255 * pred_mask[:, :, j].astype('uint8')
+        for i in range(num_instance):
+            inst_mask = 255 * pred_mask[:, :, i].astype('uint8')
             mask = inst_mask > 0
             mask = np.logical_and(mask, depth > 0)
+
             if np.sum(mask) > 16:
+                # TODO 通过mask确定bbox的 这边可以扩大bbox
                 rmin, rmax, cmin, cmax = get_bbox_from_mask(mask)
                 # convert to 0-indexed
-                cat_id = pred_data['pred_class_ids'][j] - 1
-
-                pts_raw = pts[rmin:rmax, cmin:cmax, :]
+                cat_id = pred_data['pred_class_ids'][i] - 1
 
                 rgb_raw = rgb[rmin:rmax, cmin:cmax, :]
+                pts_raw = pts[rmin:rmax, cmin:cmax, :]  # 这里是bbox内的点 包括物体和背景
+                
                 mask = mask[rmin:rmax, cmin:cmax]
-                choose = mask.flatten().nonzero()[0]
-
-                pts_raw = np.where((mask == 0)[:, :, None], np.nan, pts_raw)
-
-                instance_pts = pts_raw.reshape((-1, 3))[choose, :].copy()
+                choose = mask.flatten().nonzero()[0]    # 针对bbox的choose 下面用于过滤背景点
 
                 rgb_raw = np.array(rgb_raw.copy()).astype(np.float32) / 255.0
                 instance_rgb = rgb_raw.copy().reshape((-1, 3))[choose, :]
 
-                center = np.mean(instance_pts, axis=0)
-                # import pdb;pdb.set_trace()
-                instance_pts = instance_pts - center[np.newaxis, :]
+                instance_pts = pts_raw.copy().reshape((-1, 3))[choose, :]
+                center = np.mean(instance_pts, axis=0) 
                 pts_raw = pts_raw - center[np.newaxis, np.newaxis, :]
+                instance_pts = instance_pts - center[np.newaxis, :]
+                
+                # 针对物体点筛选出2048个点
                 if instance_pts.shape[0] <= self.sample_num:
-                    choose_idx = np.random.choice(
-                        np.arange(instance_pts.shape[0]),
-                        self.sample_num)
+                    choose_idx = np.random.choice(np.arange(instance_pts.shape[0]), self.sample_num)
                 else:
-                    choose_idx = np.random.choice(
-                        np.arange(instance_pts.shape[0]),
-                        self.sample_num, replace=False)
-                instance_pts = instance_pts[choose_idx, :]
+                    choose_idx = np.random.choice(np.arange(instance_pts.shape[0]), self.sample_num, replace=False)
                 instance_rgb = instance_rgb[choose_idx, :]
+                instance_pts = instance_pts[choose_idx, :]
 
-                rgb_raw = cv2.resize(
-                    rgb_raw,
-                    dsize=(
-                        self.num_patches * 14,
-                        self.num_patches * 14),
-                    interpolation=cv2.INTER_NEAREST)
-                pts_raw = cv2.resize(
-                    pts_raw,
-                    dsize=(
-                        self.num_patches,
-                        self.num_patches),
-                    interpolation=cv2.INTER_NEAREST)
-                mask = np.logical_not(np.isnan(pts_raw)).all(axis=-1)
-                choose = mask.flatten().nonzero()[0]
+                rgb_raw = cv2.resize(rgb_raw, dsize=(self.num_patches*14, self.num_patches*14), interpolation=cv2.INTER_NEAREST)
+                pts_raw = cv2.resize(pts_raw, dsize=(self.num_patches, self.num_patches), interpolation=cv2.INTER_NEAREST)
+
+                mask = np.logical_not(np.isnan(pts_raw)).all(axis=-1)   # num_patches**2
+                choose = mask.flatten().nonzero()[0] 
                 if len(choose) <= 0:
                     continue
                 elif len(choose) <= self.sample_num:
-                    choose_idx = np.random.choice(
-                        np.arange(len(choose)),
-                        self.sample_num)
+                    choose_idx = np.random.choice(np.arange(len(choose)), self.sample_num)
                 else:
-                    choose_idx = np.random.choice(
-                        np.arange(len(choose)),
-                        self.sample_num, replace=False)
-                choose = choose[choose_idx]
-
-                all_pts_raw.append(torch.FloatTensor(pts_raw))
-                all_rgb_raw.append(torch.FloatTensor(rgb_raw))
-                all_choose.append(torch.IntTensor(choose).long())
-                all_mask.append(torch.IntTensor(mask).long())
-                all_pts.append(torch.FloatTensor(instance_pts))
+                    choose_idx = np.random.choice(np.arange(len(choose)), self.sample_num, replace=False)
+                choose = choose[choose_idx] # 针对15*15个点的choose
+                
                 all_rgb.append(torch.FloatTensor(instance_rgb))
+                all_pts.append(torch.FloatTensor(instance_pts))
+                all_rgb_raw.append(torch.FloatTensor(rgb_raw))
+                all_pts_raw.append(torch.FloatTensor(pts_raw))
+                all_choose.append(torch.IntTensor(choose).long())
                 all_center.append(torch.FloatTensor(center))
                 all_cat_ids.append(torch.IntTensor([cat_id]).long())
-                flag_instance[j] = 1
+
+                flag_instance[i] = 1
 
         ret_dict = {}
 
@@ -496,29 +470,23 @@ class TestingDataset():
         ret_dict['gt_bboxes'] = torch.tensor(pred_data['gt_bboxes'])
         ret_dict['gt_RTs'] = torch.tensor(pred_data['gt_RTs'])
         ret_dict['gt_scales'] = torch.tensor(pred_data['gt_scales'])
-        ret_dict['gt_handle_visibility'] = torch.tensor(
-            pred_data['gt_handle_visibility'])
-        # ret_dict['index'] = index
+        ret_dict['gt_handle_visibility'] = torch.tensor(pred_data['gt_handle_visibility'])
 
         if len(all_pts) == 0:
             ret_dict['pred_class_ids'] = torch.tensor(pred_data['pred_class_ids'])
             ret_dict['pred_bboxes'] = torch.tensor(pred_data['pred_bboxes'])
             ret_dict['pred_scores'] = torch.tensor(pred_data['pred_scores'])
         else:
-            ret_dict['pts'] = torch.stack(all_pts)  # N*3
-            ret_dict['rand_rotation'] = torch.eye(3)[None, :, :].repeat(ret_dict['pts'].shape[0], 1, 1)
             ret_dict['rgb'] = torch.stack(all_rgb)
-            ret_dict['pts_raw'] = torch.stack(all_pts_raw)  # N*3
+            ret_dict['pts'] = torch.stack(all_pts)
             ret_dict['rgb_raw'] = torch.stack(all_rgb_raw)
+            ret_dict['pts_raw'] = torch.stack(all_pts_raw)
             ret_dict['choose'] = torch.stack(all_choose)
-            ret_dict['mask'] = torch.stack(all_mask)
             ret_dict['center'] = torch.stack(all_center)
             ret_dict['category_label'] = torch.stack(all_cat_ids).squeeze(1)
-            ret_dict['pred_class_ids'] = torch.tensor(
-                pred_data['pred_class_ids'])[flag_instance == 1]
-            ret_dict['pred_bboxes'] = torch.tensor(pred_data['pred_bboxes'])[
-                flag_instance == 1]
-            ret_dict['pred_scores'] = torch.tensor(pred_data['pred_scores'])[
-                flag_instance == 1]
+            # ret_dict['rand_rotation'] = torch.eye(3)[None, :, :].repeat(ret_dict['pts'].shape[0], 1, 1)
+            ret_dict['pred_class_ids'] = torch.tensor(pred_data['pred_class_ids'])[flag_instance == 1]
+            ret_dict['pred_bboxes'] = torch.tensor(pred_data['pred_bboxes'])[flag_instance == 1]
+            ret_dict['pred_scores'] = torch.tensor(pred_data['pred_scores'])[flag_instance == 1]
 
         return ret_dict

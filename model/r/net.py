@@ -68,15 +68,16 @@ class Net(nn.Module):
         choose = inputs['choose'][:, :self.match_num]
         cls = inputs['category_label'].reshape(-1)
         index = cls + torch.arange(b, dtype=torch.long).cuda() * 6
-
+        print(choose)
         dis_map, rgb_map = self.feat2smap(pts, rgb)  # (b, 1, 64, 64) (b, 3, 64, 64)
 
         dino_feature = self.extract_feature(rgb_raw)  # (b, 225, 384)
         
-        ptsf = pts_raw.reshape(b, (self.num_patches) ** 2, -1)[torch.arange(b)[:, None], choose, :]  # (b, 100, 3)
+        ptsf = pts_raw.reshape(b, (self.num_patches)**2, -1)[torch.arange(b)[:, None], choose, :]  # (b, 100, 3)
         dino_feature = dino_feature[torch.arange(b)[:, None], choose, :]  # (b, 100, 384)
         # ptsf = pts_raw.reshape(b, (self.num_patches) ** 2, -1)  # (b, 225, 3)
-
+        # print(ptsf.shape, dino_feature.shape)
+        # aaa
         _, ref_map = self.feat2smap(ptsf, dino_feature)  # (b, 384, 64, 64)
 
         x = self.spherical_fpn(dis_map, torch.cat([rgb_map, ref_map], dim=1))  # (b, 256, 32, 32)
