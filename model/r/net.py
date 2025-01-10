@@ -73,21 +73,21 @@ class Net(nn.Module):
 
         dino_feature = self.extract_feature(rgb_raw)  # (b, 225, 384)
         
-        # ptsf = pts_raw.reshape(b, (self.num_patches) ** 2, -1)[torch.arange(b)[:, None], choose, :]  # (b, 100, 3)
-        # dino_feature = dino_feature[torch.arange(b)[:, None], choose, :]  # (b, 100, 384)
-        ptsf = pts_raw.reshape(b, (self.num_patches) ** 2, -1)  # (b, 225, 3)
+        ptsf = pts_raw.reshape(b, (self.num_patches) ** 2, -1)[torch.arange(b)[:, None], choose, :]  # (b, 100, 3)
+        dino_feature = dino_feature[torch.arange(b)[:, None], choose, :]  # (b, 100, 384)
+        # ptsf = pts_raw.reshape(b, (self.num_patches) ** 2, -1)  # (b, 225, 3)
 
         _, ref_map = self.feat2smap(ptsf, dino_feature)  # (b, 384, 64, 64)
 
         x = self.spherical_fpn(dis_map, torch.cat([rgb_map, ref_map], dim=1))  # (b, 256, 32, 32)
 
         # if self.training:
-        #     feat = torch.cat([pts, pts, rgb], dim=2)
-        #     feat = self.pn2msg(feat)    # (b, 256, 2048)
-        #     pred_pts = self.pred_pts(feat)  # (b, 3*6, 2048)
-        #     pred_pts = pred_pts.view(-1, 3, 2048).contiguous()
-        #     pred_pts = torch.index_select(pred_pts, 0, index)
-        #     pred_pts = pred_pts.permute(0, 2, 1).contiguous()
+        y = torch.cat([pts, pts, rgb], dim=2)
+        feat = self.pn2msg(y)    # (b, 256, 2048)
+        pred_pts = self.pred_pts(feat)  # (b, 3*6, 2048)
+        pred_pts = pred_pts.view(-1, 3, 2048).contiguous()
+        pred_pts = torch.index_select(pred_pts, 0, index)
+        pred_pts = pred_pts.permute(0, 2, 1).contiguous()
 
         # viewpoint rotation
         vp_rot, rho_prob, phi_prob = self.v_branch(x, inputs)
@@ -99,8 +99,7 @@ class Net(nn.Module):
             'pred_rotation': vp_rot @ ip_rot,
             'rho_prob': rho_prob,
             'phi_prob': phi_prob,
+            'pred_pts': pred_pts + pts,
         }
 
-        # if self.training:
-        #     outputs['pred_pts'] = pred_pts
         return outputs

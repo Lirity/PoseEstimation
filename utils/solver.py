@@ -5,6 +5,7 @@ import cv2
 import torch
 import gorilla
 import numpy as np
+import open3d as o3d
 import _pickle as cPickle
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
@@ -277,6 +278,15 @@ def test_func(ts_model, r_model, dataloder, save_path):
                 # import pdb;pdb.set_trace()
                 end_points = r_model(inputs)
                 pred_rotation = end_points['pred_rotation']
+
+                # pred_pts = end_points['pred_pts']
+                # for j in range(pred_pts.shape[0]):
+                #     point_cloud = o3d.geometry.PointCloud()
+                #     point_cloud.points = o3d.utility.Vector3dVector(pred_pts[i].detach().cpu().numpy())
+                #     o3d.io.write_point_cloud(f"/data4/lj/PoseEstimation/example/{i}_{j}_pred.ply", point_cloud)
+                #     point_cloud.points = o3d.utility.Vector3dVector(pts[i].detach().cpu().numpy())
+                #     o3d.io.write_point_cloud(f"/data4/lj/PoseEstimation/example/{i}_{j}_gts.ply", point_cloud)
+
                 # pred_rotation = pred_rotation@ref_data['rotation_label'].cuda().float()
                 pred_rotation = pred_rotation[:, :, (1, 2, 0)]
                 dets = pred_rotation.det()

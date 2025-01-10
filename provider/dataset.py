@@ -329,6 +329,13 @@ class TrainingDataset(Dataset):
             ret_dict['vp_rotation_label'] = torch.FloatTensor(vp_rotation)
             ret_dict['ip_rotation_label'] = torch.FloatTensor(ip_rotation)
             ret_dict['pts_c_label'] = torch.FloatTensor(pts_c)
+            
+            # import open3d as o3d
+            # point_cloud = o3d.geometry.PointCloud()
+            # point_cloud.points = o3d.utility.Vector3dVector(pts)
+            # o3d.io.write_point_cloud("/data4/lj/PoseEstimation/example/point_cloud.ply", point_cloud)
+            # point_cloud.points = o3d.utility.Vector3dVector(pts_c)
+            # o3d.io.write_point_cloud("/data4/lj/PoseEstimation/example/point_cloud_gt.ply", point_cloud)
 
             # import trimesh
             # cloud_close = trimesh.points.PointCloud(np.concatenate((pts_c, pts), axis=0))
@@ -346,12 +353,13 @@ class TestingDataset():
         self.sample_num = config.sample_num
         self.num_patches = 15
 
-        result_pkl_list = glob.glob(
-            os.path.join(
+        result_pkl_list = glob.glob(os.path.join(
                 self.data_dir,
                 'segmentation_results',
                 'test_trainedwithMask',
-                'results_*.pkl'))
+                'results_*.pkl'
+            )
+        )
         self.result_pkl_list = sorted(result_pkl_list)
         n_image = len(result_pkl_list)
         print('no. of test images: {}\n'.format(n_image))
@@ -377,6 +385,7 @@ class TestingDataset():
         image_path = os.path.join(self.data_dir, pred_data['image_path'][5:])
         pred_mask = pred_data['pred_masks']
         num_instance = len(pred_data['pred_class_ids'])
+
         # rgb
         rgb = cv2.imread(image_path + '_color.png')[:, :, :3]
         rgb = rgb[:, :, ::-1]  # 480*640*3
@@ -401,14 +410,14 @@ class TestingDataset():
         all_pts = []
         all_center = []
         all_cat_ids = []
+        flag_instance = torch.zeros(num_instance) == 1
+
         all_rgb_raw = []
         all_pts_raw = []
         all_mask = []
         all_choose = []
 
-        flag_instance = torch.zeros(num_instance) == 1
         for j in range(num_instance):
-
             inst_mask = 255 * pred_mask[:, :, j].astype('uint8')
             mask = inst_mask > 0
             mask = np.logical_and(mask, depth > 0)
@@ -422,8 +431,6 @@ class TestingDataset():
                 rgb_raw = rgb[rmin:rmax, cmin:cmax, :]
                 mask = mask[rmin:rmax, cmin:cmax]
                 choose = mask.flatten().nonzero()[0]
-                # if path == '../../data/NOCS/detection/REAL275/results_test_scene_1_0000.pkl':
-                #     import pdb;pdb.set_trace()
 
                 pts_raw = np.where((mask == 0)[:, :, None], np.nan, pts_raw)
 
@@ -494,15 +501,12 @@ class TestingDataset():
         # ret_dict['index'] = index
 
         if len(all_pts) == 0:
-            ret_dict['pred_class_ids'] = torch.tensor(
-                pred_data['pred_class_ids'])
+            ret_dict['pred_class_ids'] = torch.tensor(pred_data['pred_class_ids'])
             ret_dict['pred_bboxes'] = torch.tensor(pred_data['pred_bboxes'])
             ret_dict['pred_scores'] = torch.tensor(pred_data['pred_scores'])
-
         else:
             ret_dict['pts'] = torch.stack(all_pts)  # N*3
-            ret_dict['rand_rotation'] = torch.eye(
-                3)[None, :, :].repeat(ret_dict['pts'].shape[0], 1, 1)
+            ret_dict['rand_rotation'] = torch.eye(3)[None, :, :].repeat(ret_dict['pts'].shape[0], 1, 1)
             ret_dict['rgb'] = torch.stack(all_rgb)
             ret_dict['pts_raw'] = torch.stack(all_pts_raw)  # N*3
             ret_dict['rgb_raw'] = torch.stack(all_rgb_raw)

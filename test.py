@@ -17,6 +17,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(BASE_DIR, 'lib', 'sphericalmap_utils'))
 sys.path.append(os.path.join(BASE_DIR, 'lib', 'pointnet2'))
 
+torch.cuda.set_device(6)
 
 def init_cfg():
     parser = argparse.ArgumentParser()
@@ -96,7 +97,7 @@ def run():
     save_path = os.path.join(cfg.log_dir, 'epoch_' + str(cfg.test_epoch))
     if not os.path.isdir(save_path):
         os.makedirs(save_path)
-        test_func(ts_model, r_model, dataloder, save_path)
+    test_func(ts_model, r_model, dataloder, save_path)
     evaluate(save_path, logger)
     logger.info("end test logging...")
 
