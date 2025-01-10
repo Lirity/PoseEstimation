@@ -47,8 +47,7 @@ class Loss(nn.Module):
 
         vp_loss = rho_loss + phi_loss
         ip_loss = self.l1loss(pred['pred_rotation'], gt['rotation_label'])
-        rec_loss = chamfer_distance(pred['pred_pts'], torch.cat([gt['pts_c_label'], gt['pts_c_label']], dim=1))[0]
-
+        rec_loss = chamfer_distance(pred['pred_pts'], torch.cat([gt['model_pts_cam_label'], gt['model_pts_cam_label']], dim=1))[0]
         loss = self.cfg.vp_weight * vp_loss + ip_loss + self.cfg.rec_weight * rec_loss
         # loss = self.cfg.vp_weight * vp_loss + ip_loss
 
